@@ -1,0 +1,337 @@
+import pygame
+import random
+import pickle
+import sys
+
+# Initializes Pygame
+pygame.init()
+
+# Constants defining the screen dimensions, colors, initial game parameters, and other settings
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+WHITE = (255, 255, 255)
+DOG_SPEED = 3
+LIVES = 3
+SCORE = 0
+DOGS_JUMPED = 0
+jump_counter = 0
+game_paused = False
+display_score_time = 0
+FONT_COLOR = (0, 0, 0)
+high_scores = []
+menu_index = 0
+menu_options = ["Start Game", "High Scores", "Exit"]
+DOG_SPEED_INCREMENT = 1
+DOG_SPEED_THRESHOLD = 100  # Speed increases every 100 points
+
+# Creates the screen for the game and sets the title of the window
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Dog Dodger")
+
+# Loads sound effects and background music for the game
+menu_select_sound = pygame.mixer.Sound("menu_select.wav")
+menu_accept_sound = pygame.mixer.Sound("menu_accept.wav")
+hit_sound = pygame.mixer.Sound("hit.wav")
+pause_sound = pygame.mixer.Sound("pause.wav")
+pygame.mixer.music.load("game_music.wav")  # Uses WAV format for game music
+
+# Sets font styles for rendering text in the game
+font = pygame.font.Font(None, 36)
+title_font = pygame.font.Font(None, 72)
+
+# Defines a class for the Firefighter character
+class Firefighter(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()  # Calls the initializer of the parent class
+        self.image = pygame.image.load("firefighter.png").convert_alpha()  # Loads the firefighter image
+        self.image = pygame.transform.scale(self.image, (50, 80))  # Resizes the firefighter image
+        self.rect = self.image.get_rect()  # Retrieves the rectangular dimensions of the image
+        self.rect.center = (100, SCREEN_HEIGHT - 70)  # Sets the initial position of the firefighter
+        self.jump_speed = 12  # Sets the speed of the jump
+        self.gravity = 0.6  # Defines the gravitational pull
+        self.velocity_y = 0  # Initializes vertical velocity
+        self.jumping = False  # Initializes the jumping state
+
+    def update(self):
+        keys = pygame.key.get_pressed()  # Retrieves the state of all keyboard keys
+        if keys[pygame.K_LEFT]:  # Moves left if the left key is pressed
+            self.rect.x -= 5
+        if keys[pygame.K_RIGHT]:  # Moves right if the right key is pressed
+            self.rect.x += 5
+        if keys[pygame.K_SPACE] and not self.jumping:  # Initiates jump if space is pressed and not currently jumping
+            self.jumping = True
+            self.velocity_y = -self.jump_speed  # Sets the upward velocity for the jump
+        if self.jumping:  # Handles the jumping mechanics
+            self.rect.y += self.velocity_y  # Moves the firefighter vertically based on velocity
+            self.velocity_y += self.gravity  # Applies gravity to the vertical velocity
+            if self.rect.bottom >= SCREEN_HEIGHT - 10:  # Checks if the firefighter lands
+                self.rect.bottom = SCREEN_HEIGHT - 10  # Resets position to ground level
+                self.jumping = False  # Ends the jump
+
+        # Restricts horizontal movement to within screen boundaries
+        self.rect.x = max(0, min(self.rect.x, SCREEN_WIDTH - self.rect.width))
+
+    def draw(self):
+        screen.blit(self.image, self.rect)  # Draws the firefighter on the screen at its current position
+
+    def reset_position(self):
+        self.rect.center = (100, SCREEN_HEIGHT - 70)  # Resets the firefighter's position
+
+# Defines a class for the Dog enemies
+class Dog(pygame.sprite.Sprite):
+    def __init__(self, speed):
+        super().__init__()  # Calls the initializer of the parent class
+        self.image = pygame.image.load("dog.png").convert_alpha()  # Loads the dog image
+        self.image = pygame.transform.scale(self.image, (60, 40))  # Resizes the dog image
+        self.rect = self.image.get_rect()  # Retrieves the rectangular dimensions of the image
+        self.rect.x = SCREEN_WIDTH + random.randint(100, 300)  # Starts the dog off-screen to the right
+        self.rect.y = SCREEN_HEIGHT - 70  # Sets the vertical position of the dog
+        self.speed = speed  # Sets the initial speed of the dog
+
+    def update(self):
+        self.rect.x -= self.speed  # Moves the dog left at its speed
+        if self.rect.x < -self.rect.width:  # Checks if the dog moves off-screen
+            self.rect.x = SCREEN_WIDTH + random.randint(300, 600)  # Resets position further away
+
+    def draw(self):
+        screen.blit(self.image, self.rect)  # Draws the dog on the screen at its current position
+
+# High Scores handling
+def save_high_score(name, score):
+    global high_scores  # Uses the global high_scores list
+    high_scores.append((name, score))  # Adds a new high score entry
+    high_scores.sort(key=lambda x: x[1], reverse=True)  # Sorts high scores in descending order
+    with open("high_scores.pkl", "wb") as f:  # Opens a file for writing binary data
+        pickle.dump(high_scores, f)  # Saves the high scores to a file
+
+def load_high_scores():
+    global high_scores  # Uses the global high_scores list
+    try:
+        with open("high_scores.pkl", "rb") as f:  # Attempts to open the high scores file for reading
+            high_scores = pickle.load(f)  # Loads the high scores from the file
+    except FileNotFoundError:
+        high_scores = []  # Initializes an empty list if the file is not found
+
+# Function to save the game progress
+def save_game(score, lives):
+    save_data = {
+        'score': score,
+        'lives': lives,
+        'dogs_jumped': DOGS_JUMPED,
+        'dog_speed': DOG_SPEED
+    }
+    with open("savegame.pkl", "wb") as save_file:  # Opens a file for writing binary data
+        pickle.dump(save_data, save_file)  # Saves the game state to a file
+    print("Game Saved")  # Confirms that the game has been saved
+
+# Function to load the game progress
+def load_game():
+    global SCORE, LIVES, DOGS_JUMPED, DOG_SPEED  # Uses global variables for the game state
+    try:
+        with open("savegame.pkl", "rb") as save_file:  # Attempts to open the save file for reading
+            save_data = pickle.load(save_file)  # Loads the saved data from the file
+            SCORE = save_data['score']  # Updates the score from the saved data
+            LIVES = save_data['lives']  # Updates the lives from the saved data
+            DOGS_JUMPED = save_data['dogs_jumped']  # Updates the number of dogs jumped from the saved data
+            DOG_SPEED = save_data['dog_speed']  # Updates the dog speed from the saved data
+        print("Game Loaded")  # Confirms that the game has been loaded
+    except FileNotFoundError:
+        print("No saved game found")  # Informs that no save file exists
+
+# Main game loop
+def game_loop():
+    global SCORE, LIVES, DOGS_JUMPED, game_paused, display_score_time, jump_counter, DOG_SPEED, DOG_SPEED_THRESHOLD
+    firefighter = Firefighter()  # Creates an instance of the Firefighter
+    dogs = [Dog(DOG_SPEED), Dog(DOG_SPEED)]  # Creates two instances of the Dog
+    clock = pygame.time.Clock()  # Initializes a clock for frame rate control
+    running = True  # Sets the running state of the game loop
+
+    while running:
+        for event in pygame.event.get():  # Checks for user input events
+            if event.type == pygame.QUIT:  # Handles window close event
+                running = False
+            if event.type == pygame.KEYDOWN:  # Handles key press events
+                if event.key == pygame.K_p:  # Toggles pause state
+                    game_paused = not game_paused
+                    pause_sound.play()  # Plays pause sound effect
+                if event.key == pygame.K_s:  # Saves the current game state
+                    save_game(SCORE, LIVES)
+                if event.key == pygame.K_ESCAPE:  # Exits the game on pressing ESC
+                    running = False
+
+        if game_paused:  # Skips updates if the game is paused
+            continue
+
+        screen.fill(WHITE)  # Clears the screen with a white background
+
+        # Updates and draws the firefighter character
+        firefighter.update()
+        firefighter.draw()
+
+        # Updates and draws the dog enemies
+        for dog in dogs:
+            dog.update()
+            dog.draw()
+
+            # Checks for collision between the firefighter and the dog
+            if check_collision(firefighter, dog):
+                LIVES -= 1  # Decreases lives on collision
+                hit_sound.play()  # Plays hit sound effect
+                firefighter.reset_position()  # Resets the firefighter's position
+                if LIVES <= 0:  # Checks if the game is over due to no lives remaining
+                    game_over()  # Calls the game over function
+                    return
+
+            # Checks if the firefighter jumps over the dog
+            if dog.rect.x < firefighter.rect.x < dog.rect.x + dog.rect.width and not firefighter.jumping:
+                jump_counter += 1  # Increments jump counter
+                DOGS_JUMPED += 1  # Increments the number of dogs jumped
+                display_score_time = pygame.time.get_ticks()  # Records the time to display score increment
+
+        # Increases score continuously
+        SCORE += 1
+
+        # Increases dog speed at score milestones
+        if SCORE >= DOG_SPEED_THRESHOLD:
+            DOG_SPEED += DOG_SPEED_INCREMENT  # Increases the dog speed
+            DOG_SPEED_THRESHOLD += 100  # Updates the threshold for the next speed increase
+            # Updates the dogs with the new speed
+            for dog in dogs:
+                dog.speed = DOG_SPEED
+
+        # Displays the current score and lives remaining
+        display_score_and_lives()
+
+        # Shows score increment for a limited time
+        if display_score_time > 0 and pygame.time.get_ticks() - display_score_time < 1000:
+            score_increment_text = font.render("+20", True, (0, 255, 0))  # Creates score increment text
+            screen.blit(score_increment_text, (firefighter.rect.centerx, firefighter.rect.top - 30))  # Displays the score increment
+
+        pygame.display.flip()  # Updates the display with the new drawings
+        clock.tick(60)  # Limits the frame rate to 60 FPS
+
+# Resets the game state for a new game
+def reset_game():
+    global SCORE, LIVES, DOG_SPEED, DOG_SPEED_THRESHOLD
+    SCORE = 0  # Resets the score
+    LIVES = 3  # Resets the lives
+    DOG_SPEED = 3  # Resets speed for the new game
+    DOG_SPEED_THRESHOLD = 100  # Resets score threshold for speed increase
+    pygame.mixer.music.play(-1)  # Restarts the background music
+    game_loop()  # Calls the main game loop
+
+# Collision check between the firefighter and dog
+def check_collision(firefighter, dog):
+    return firefighter.rect.colliderect(dog.rect)  # Returns True if the two rectangles overlap
+
+# Displays the current score and lives on the screen
+def display_score_and_lives():
+    score_text = font.render(f"Score: {SCORE}  Lives: {LIVES}", True, FONT_COLOR)  # Creates score and lives text
+    screen.blit(score_text, (10, 10))  # Draws the score and lives text on the screen
+
+# Game over function that handles game-over state
+def game_over():
+    global SCORE, LIVES
+    initials = ""  # Initializes an empty string for initials
+    game_over_screen = True  # Sets the game over screen state
+
+    while game_over_screen:
+        screen.fill(WHITE)  # Clears the screen with a white background
+        game_over_text = font.render("Game Over!", True, (255, 0, 0))  # Creates game over text
+        score_text = font.render(f"Score: {SCORE}", True, FONT_COLOR)  # Creates score display text
+        enter_name_text = font.render(f"Enter your initials: {initials}", True, FONT_COLOR)  # Prompts for initials
+
+        # Displays the game over text and score
+        screen.blit(game_over_text, (SCREEN_WIDTH // 2 - game_over_text.get_width() // 2, SCREEN_HEIGHT // 4))
+        screen.blit(score_text, (SCREEN_WIDTH // 2 - score_text.get_width() // 2, SCREEN_HEIGHT // 4 + 50))
+        screen.blit(enter_name_text, (SCREEN_WIDTH // 2 - enter_name_text.get_width() // 2, SCREEN_HEIGHT // 4 + 100))
+
+        pygame.display.flip()  # Updates the display with the new drawings
+
+        for event in pygame.event.get():  # Checks for user input events
+            if event.type == pygame.QUIT:  # Handles window close event
+                game_over_screen = False
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:  # Handles key press events
+                if event.key == pygame.K_RETURN and len(initials) == 3:  # Saves high score if initials are complete
+                    save_high_score(initials, SCORE)  # Saves the high score
+                    game_over_screen = False
+                    show_menu()  # Shows the main menu
+                elif event.key == pygame.K_BACKSPACE:  # Removes the last character from initials
+                    initials = initials[:-1]
+                else:  # Appends a character to initials
+                    initials += event.unicode.upper()
+
+# Main menu function
+def show_menu():
+    global menu_index  # Uses the global menu_index to track the selected menu option
+    menu_running = True  # Sets the state of the menu
+
+    while menu_running:
+        screen.fill(WHITE)  # Clears the screen with a white background
+        title_text = title_font.render("Dog Dodger", True, (0, 128, 0))  # Creates the title text
+        screen.blit(title_text, (SCREEN_WIDTH // 2 - title_text.get_width() // 2, 50))  # Displays the title
+
+        # Iterates over menu options and displays them
+        for i, option in enumerate(menu_options):
+            color = (0, 0, 0) if i != menu_index else (255, 0, 0)  # Highlights the selected option
+            option_text = font.render(option, True, color)  # Creates the menu option text
+            screen.blit(option_text, (SCREEN_WIDTH // 2 - option_text.get_width() // 2, 200 + i * 40))  # Displays the option
+
+        pygame.display.flip()  # Updates the display with the new drawings
+
+        for event in pygame.event.get():  # Checks for user input events
+            if event.type == pygame.QUIT:  # Handles window close event
+                menu_running = False
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:  # Handles key press events
+                if event.key == pygame.K_DOWN:  # Moves down in the menu
+                    menu_index = (menu_index + 1) % len(menu_options)  # Loops to the first option if at the end
+                    menu_select_sound.play()  # Plays menu select sound effect
+                elif event.key == pygame.K_UP:  # Moves up in the menu
+                    menu_index = (menu_index - 1) % len(menu_options)  # Loops to the last option if at the start
+                    menu_select_sound.play()  # Plays menu select sound effect
+                elif event.key == pygame.K_RETURN:  # Selects the current menu option
+                    menu_accept_sound.play()  # Plays menu accept sound effect
+                    if menu_options[menu_index] == "Start Game":  # Starts the game if selected
+                        reset_game()
+                    elif menu_options[menu_index] == "High Scores":  # Shows high scores if selected
+                        show_high_scores()
+                    elif menu_options[menu_index] == "Exit":  # Exits the game if selected
+                        pygame.quit()
+                        sys.exit()
+
+# High score display function
+def show_high_scores():
+    load_high_scores()  # Loads high scores from the file
+    high_scores_screen = True  # Sets the state of the high scores screen
+
+    while high_scores_screen:
+        screen.fill(WHITE)  # Clears the screen with a white background
+        title_text = font.render("High Scores", True, (0, 0, 0))  # Creates the title text for high scores
+        screen.blit(title_text, (SCREEN_WIDTH // 2 - title_text.get_width() // 2, 50))  # Displays the title
+
+        # Iterates over the top high scores and displays them
+        for i, (name, score) in enumerate(high_scores[:10]):
+            score_text = font.render(f"{i + 1}. {name}: {score}", True, FONT_COLOR)  # Creates high score text
+            screen.blit(score_text, (SCREEN_WIDTH // 2 - score_text.get_width() // 2, 150 + i * 30))  # Displays the high score
+
+        back_text = font.render("Press M to return to the Main Menu", True, FONT_COLOR)  # Creates back prompt text
+        screen.blit(back_text, (SCREEN_WIDTH // 2 - back_text.get_width() // 2, SCREEN_HEIGHT - 100))  # Displays back prompt
+
+        pygame.display.flip()  # Updates the display with the new drawings
+
+        for event in pygame.event.get():  # Checks for user input events
+            if event.type == pygame.QUIT:  # Handles window close event
+                high_scores_screen = False
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:  # Handles key press events
+                if event.key == pygame.K_m:  # Returns to the main menu if M is pressed
+                    show_menu()
+
+# Starts the game
+if __name__ == "__main__":
+    show_menu()  # Calls the menu display function to start the game
