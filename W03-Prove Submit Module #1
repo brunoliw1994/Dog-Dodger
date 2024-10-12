@@ -332,6 +332,6 @@ def show_high_scores():
                 if event.key == pygame.K_m:  # Returns to the main menu if M is pressed
                     show_menu()
 
-# Starts the game
+# Here it starts the game 
 if __name__ == "__main__":
     show_menu()  # Calls the menu display function to start the game
