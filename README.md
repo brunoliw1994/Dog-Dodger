@@ -1,9 +1,8 @@
 # Overview
 
-The intent of this code is to learn how to make a basic game using python.
+This code intends to help me learn how to make a basic game using python.
 
-{Provide a description the game that you wrote. Describe how to play your game.}
-Dog Dodger is a game inspired on the Google Dinosaur game. The goal is to jump over dogs that are trying to catch you while you make points by surviving the challenge the longest.
+Dog Dodger is a game inspired on the Google Dinosaur game. The goal is to jump over dogs trying to catch you while you make points by surviving the challenge the longest.
 Moving instructions:
 Jump -> Spacebar
 Forward -> right key
@@ -11,9 +10,7 @@ Backward -> left key
 
 The purpose of this code is to have my first experience making games.
 
-{Provide a link to your YouTube demonstration.  It should be a 4-5 minute demo of the game being played and a walkthrough of the code.}
-
-[Software Demo Video](http://youtube.link.goes.here)
+[Dog Dodger Presentation](https://youtu.be/lh8sqvxFEbQ)
 
 # Development Environment
 
